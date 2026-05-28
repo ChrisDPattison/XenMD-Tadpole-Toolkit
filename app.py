@@ -240,18 +240,7 @@ if st.session_state.analysis_complete:
         
         plot_html = fig.to_html(include_plotlyjs="cdn")
         
-        try:
-            plot_png = fig.to_image(format="png", engine="kaleido")
-        except Exception as e:
-            plot_png = None
-            st.warning("PNG export currently unavailable. Please check Kaleido installation.")
-
-        plot_dl1, plot_dl2, _ = st.columns([1.2, 1.2, 5])
-        with plot_dl1:
-            st.download_button("📉 Download Plot (HTML)", data=plot_html, file_name="tadpole_distribution_plot.html", mime="text/html")
-        with plot_dl2:
-            if plot_png is not None:
-                st.download_button("🖼️ Download Static Plot (PNG)", data=plot_png, file_name="tadpole_distribution_plot.png", mime="image/png")
+        st.download_button("📉 Download Interactive Plot (HTML)", data=plot_html, file_name="tadpole_distribution_plot.html", mime="text/html")
 
     st.write("### 📝 Raw Data Table")
     

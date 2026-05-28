@@ -5,4 +5,3 @@ opencv-python-headless
 plotly
 shapely
 Pillow
-kaleido==0.1.0.post1
