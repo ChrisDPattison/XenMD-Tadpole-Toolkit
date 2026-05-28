@@ -14,7 +14,7 @@ def calculate_morphology(res, pixel_to_mm_ratio=1.0):
         "Left Eye Area": np.nan,
         "Right Eye Area": np.nan,
         "Total Eye Area": np.nan, 
-        "Orbital Asymmetry Ratio": np.nan, 
+        "Orbital Symmetry Ratio": np.nan, 
         "Orbital Asymmetry % Difference": np.nan,
         "Interpupillary Distance Ratio": np.nan
     }
@@ -68,7 +68,7 @@ def calculate_morphology(res, pixel_to_mm_ratio=1.0):
             stats["Total Eye Area"] = round(left_area + right_area, 2)
             
             if right_area > 0:
-                stats["Orbital Asymmetry Ratio"] = round(left_area / right_area, 3)
+                stats["Orbital Symmetry Ratio"] = round(left_area / right_area, 3)
                 
             if (left_area + right_area) > 0:
                 diff = abs(left_area - right_area)

@@ -7,9 +7,9 @@ from ultralytics import YOLO
 from tadpole_core import calculate_morphology, paint_measured_biology
 
 def deep_batch_analyze():
-    MODEL_PATH = "/Users/chris/XTropicalis/Code/runs/segment/Tadpole_AI/Training_Run_4/weights/best.pt"
-    PARENT_DIR = "/Users/chris/XTropicalis/Data/Objective 1 - Morphology"
-    OUTPUT_PROJECT = "/Users/chris/XTropicalis/Code/runs/segment/Objective_1_Results"
+    MODEL_PATH = "best.pt"
+    PARENT_DIR = "Data_to_Analyze"
+    OUTPUT_PROJECT = "Analysis_Results"
     
     print("🧠 Loading Tadpole AI...")
     model = YOLO(MODEL_PATH)
@@ -66,9 +66,14 @@ def deep_batch_analyze():
         print("\n✅ All nested folders processed successfully! Compiling data...")
         df = pd.DataFrame(master_results_data)
         
+        # Pull Filename to the front, push Status Flag to the back!
         cols = df.columns.tolist()
-        cols.remove("Status Flag")
-        cols.append("Status Flag") 
+        if "Filename" in cols:
+            cols.remove("Filename")
+            cols.insert(0, "Filename")
+        if "Status Flag" in cols:
+            cols.remove("Status Flag")
+            cols.append("Status Flag") 
         df = df[cols]
         
         raw_csv_name = "Objective_1_Morphology_Results.csv"
@@ -98,7 +103,7 @@ def deep_batch_analyze():
                 std_total_eye = clean_group["Total Eye Area"].std()
                 
                 mean_ratio = clean_group["Interpupillary Distance Ratio"].mean()
-                mean_asym_ratio = clean_group["Orbital Asymmetry Ratio"].mean()
+                mean_sym_ratio = clean_group["Orbital Symmetry Ratio"].mean()
                 mean_asym_diff = clean_group["Orbital Asymmetry % Difference"].mean()
                 
                 outliers = []
@@ -123,7 +128,7 @@ def deep_batch_analyze():
                     "Mean Total Eye Area (px²)": round(mean_total_eye, 2),
                     "CV% Total Eye Area": round((std_total_eye/mean_total_eye)*100, 1) if std_total_eye else 0.0,
                     "Mean Interpupillary Dist Ratio": round(mean_ratio, 2),
-                    "Mean Orbital Asym Ratio": round(mean_asym_ratio, 3),
+                    "Mean Orbital Sym Ratio": round(mean_sym_ratio, 3),
                     "Mean Orbital Asym % Diff": round(mean_asym_diff, 2),
                     "Flags & Outliers (Check these images)": flag_str
                 })
@@ -141,7 +146,7 @@ def deep_batch_analyze():
                     "Mean Total Eye Area (px²)": np.nan,
                     "CV% Total Eye Area": np.nan,
                     "Mean Interpupillary Dist Ratio": np.nan,
-                    "Mean Orbital Asym Ratio": np.nan,
+                    "Mean Orbital Sym Ratio": np.nan,
                     "Mean Orbital Asym % Diff": np.nan,
                     "Flags & Outliers (Check these images)": flag_str
                 })

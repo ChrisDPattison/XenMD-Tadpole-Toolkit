@@ -10,7 +10,7 @@ from tadpole_core import calculate_morphology, paint_measured_biology
 
 @st.cache_resource
 def load_model():
-    MODEL_PATH = "/Users/chris/XTropicalis/Code/runs/segment/Tadpole_AI/Training_Run_2/weights/best.pt" 
+    MODEL_PATH = "best.pt" 
     model = YOLO(MODEL_PATH)
     model.model.names = {0: 'Eye', 1: 'Head'} 
     return model
@@ -25,15 +25,15 @@ st.set_page_config(page_title="XenMD: TadpoleToolKit", layout="wide", page_icon=
 
 col1, col2, col3 = st.columns([1.5, 1.5, 4])
 with col1:
-    st.image(load_crisp_logo("/Users/chris/XTropicalis/XenMD.png", target_height=120)) 
+    st.image(load_crisp_logo("XenMD.png", target_height=120)) 
 with col2:
-    st.image(load_crisp_logo("/Users/chris/XTropicalis/icg_logo.png", target_height=120)) 
+    st.image(load_crisp_logo("icg_logo.png", target_height=120)) 
 
 st.title("XenMD: TadpoleToolKit")
 st.write("Upload your tadpole microscopy images to automatically detect heads and eyes, measure traits, and generate instant analytics.")
 
 st.success("""
-**About this model:** Machine learning model trained to segment the head and eyes of *Xenopus tropicalis* tadpoles, and will return the head size, interpupillary distance, and eye sizes for each tadpole. The model has primarily been trained on NF42 tadpoles. You are welcome to try it on older examples, but results may vary.
+**About this model:** Machine learning model trained to segment the head and eyes of *Xenopus tropicalis* tadpoles, and will return the head size, interpupillary distance, and eye sizes for each tadpole.
 """)
 
 if 'analysis_complete' not in st.session_state:
@@ -75,7 +75,13 @@ if len(all_uploads) > 0:
                 my_bar.progress((idx + 1) / total_files, text=f"Analyzing {file.name} ({idx + 1}/{total_files})")
                 
                 original_image = Image.open(file).convert("RGB")
-                res = model.predict(source=original_image, conf=0.5, device='mps', retina_masks=True, verbose=False)[0]
+                res = model.predict(
+                    source=original_image, 
+                    conf=0.5, 
+                    device='mps', 
+                    retina_masks=True, 
+                    verbose=False
+                )[0]
                 
                 stats, flag, final_head, valid_eyes = calculate_morphology(res, pixel_to_mm_ratio=1.0)
                 
@@ -95,7 +101,7 @@ if len(all_uploads) > 0:
                     "Left Eye Area": stats["Left Eye Area"],
                     "Right Eye Area": stats["Right Eye Area"],
                     "Total Eye Area": stats["Total Eye Area"],
-                    "Orbital Asymmetry Ratio": stats["Orbital Asymmetry Ratio"],
+                    "Orbital Symmetry Ratio": stats["Orbital Symmetry Ratio"],
                     "Orbital Asymmetry % Difference": stats["Orbital Asymmetry % Difference"],
                     "Interpupillary Distance Ratio": stats["Interpupillary Distance Ratio"],
                     "Status Flag": flag 
@@ -159,7 +165,7 @@ if st.session_state.analysis_complete:
             f"Left Eye Area {area_unit}": new_row["Left Eye Area"],
             f"Right Eye Area {area_unit}": new_row["Right Eye Area"],
             f"Total Eye Area {area_unit}": new_row["Total Eye Area"],
-            "Orbital Asymmetry Ratio": new_row["Orbital Asymmetry Ratio"], 
+            "Orbital Symmetry Ratio": new_row["Orbital Symmetry Ratio"], 
             "Orbital Asymmetry % Diff": new_row["Orbital Asymmetry % Difference"],
             f"Interpupillary Dist Ratio {dist_unit}": new_row["Interpupillary Distance Ratio"],
             "Status Flag": new_row["Status Flag"]
@@ -255,7 +261,7 @@ if st.session_state.analysis_complete:
         * **Interpupillary Distance:** The shortest linear distance between the inner edges of the left and right eyes.
         * **Left and Right Eye Area:** The 2D cross-sectional area of the individual eyes.
         * **Total Eye Area:** The sum of the left and right eye areas.
-        * **Orbital Asymmetry Ratio:** `Left Eye Area / Right Eye Area`. A value of 1.0 indicates perfect developmental symmetry.
+        * **Orbital Symmetry Ratio:** `Left Eye Area / Right Eye Area`. A value of 1.0 indicates perfect developmental symmetry.
         * **Orbital Asymmetry % Diff:** The absolute difference between the two eyes divided by their average, expressed as a percentage.
         * **Interpupillary Distance Ratio:** `Head Area / Interpupillary Distance`. 
         * **Status Flag:** Indicates if the AI successfully measured all traits (`OK`) or encountered an anatomical anomaly (e.g., `Missing Head`).
