@@ -2,12 +2,9 @@
 import numpy as np
 import cv2
 from shapely.geometry import Polygon
+from shapely.ops import unary_union
 
 def calculate_morphology(res, pixel_to_mm_ratio=1.0):
-    """
-    Takes a raw YOLO result object, applies biological priors (Highlander rule, Orbit rule),
-    and calculates morphological stats safely.
-    """
     stats = {
         "Head Area": np.nan,
         "Interpupillary Distance": np.nan,
@@ -37,6 +34,10 @@ def calculate_morphology(res, pixel_to_mm_ratio=1.0):
     for mask_coords, cls, conf in zip(masks, classes, confs):
         if len(mask_coords) >= 3:
             poly = Polygon(mask_coords)
+            
+            if not poly.is_valid:
+                poly = poly.buffer(0)
+                
             label = names[int(cls)]
             
             if label == 'Head':
@@ -47,14 +48,41 @@ def calculate_morphology(res, pixel_to_mm_ratio=1.0):
     if len(raw_heads) > 0:
         raw_heads.sort(key=lambda x: x["conf"], reverse=True)
         final_head_obj = raw_heads[0]
-        stats["Head Area"] = round(final_head_obj["poly"].area * (pixel_to_mm_ratio ** 2), 2)
     else:
         flag = "Missing Head"
         
     if final_head_obj is not None:
+        
+        # 1. Find Valid Eyes
+        head_search_area = final_head_obj["poly"].buffer(200.0)
         for eye in raw_eyes:
-            if final_head_obj["poly"].intersects(eye["poly"]):
+            if head_search_area.intersects(eye["poly"]):
                 valid_eyes_objs.append(eye)
+                
+        # 2. THE SURGICAL SPACKLE
+        patched_head = final_head_obj["poly"]
+        
+        for eye in valid_eyes_objs:
+            # Isolate a tight 30-pixel zone around the eye
+            local_zone = eye["poly"].buffer(30.0)
+            
+            # Grab just the broken edge of the head inside that local zone
+            local_head = patched_head.intersection(local_zone)
+            
+            # Snap a rubber band (convex hull) around just the eye and that local edge to create a patch
+            local_patch = unary_union([local_head, eye["poly"]]).convex_hull
+            
+            # Plaster the patch onto the main head. 
+            # The rest of the tadpole is completely mathematically untouched!
+            patched_head = unary_union([patched_head, local_patch])
+            
+        if patched_head.geom_type == 'MultiPolygon':
+            patched_head = max(patched_head.geoms, key=lambda a: a.area)
+            
+        final_head_obj["poly"] = patched_head
+        
+        # 3. Now calculate the corrected, true Head Area
+        stats["Head Area"] = round(final_head_obj["poly"].area * (pixel_to_mm_ratio ** 2), 2)
                 
     if final_head_obj is not None:
         if len(valid_eyes_objs) == 2:
@@ -89,10 +117,6 @@ def calculate_morphology(res, pixel_to_mm_ratio=1.0):
 
 
 def paint_measured_biology(res, final_head_obj, valid_eyes_objs):
-    """
-    Bypasses YOLO's raw masks and uses OpenCV to draw the EXACT solid shapes.
-    Includes smart quadrant-based placement to keep labels close but non-overlapping.
-    """
     annotated_img = res.orig_img.copy()
     overlay = annotated_img.copy()
 
@@ -100,11 +124,19 @@ def paint_measured_biology(res, final_head_obj, valid_eyes_objs):
     eye_color = (66, 228, 240)   
     
     if final_head_obj is not None:
-        head_coords = np.array(final_head_obj["poly"].exterior.coords, dtype=np.int32)
+        poly_to_draw = final_head_obj["poly"]
+        if poly_to_draw.geom_type == 'MultiPolygon':
+            poly_to_draw = max(poly_to_draw.geoms, key=lambda a: a.area)
+            
+        head_coords = np.array(poly_to_draw.exterior.coords, dtype=np.int32)
         cv2.fillPoly(overlay, [head_coords], color=head_color)
 
     for eye_obj in valid_eyes_objs:
-        eye_coords = np.array(eye_obj["poly"].exterior.coords, dtype=np.int32)
+        poly_to_draw = eye_obj["poly"]
+        if poly_to_draw.geom_type == 'MultiPolygon':
+            poly_to_draw = max(poly_to_draw.geoms, key=lambda a: a.area)
+            
+        eye_coords = np.array(poly_to_draw.exterior.coords, dtype=np.int32)
         cv2.fillPoly(overlay, [eye_coords], color=eye_color)
 
     cv2.addWeighted(overlay, 0.4, annotated_img, 0.6, 0, annotated_img)
@@ -115,6 +147,9 @@ def paint_measured_biology(res, final_head_obj, valid_eyes_objs):
         return not (rect1[2] < rect2[0] or rect1[0] > rect2[2] or rect1[3] < rect2[1] or rect1[1] > rect2[3])
 
     def draw_smart_label(img, poly, text, label_color, placement_hint):
+        if poly.geom_type == 'MultiPolygon':
+            poly = max(poly.geoms, key=lambda a: a.area)
+            
         minx, miny, maxx, maxy = poly.bounds
         text_scale = 1.2 
         text_thickness = 2
@@ -173,16 +208,24 @@ def paint_measured_biology(res, final_head_obj, valid_eyes_objs):
         cv2.putText(img, text, text_org, text_font, text_scale, text_color, text_thickness, cv2.LINE_AA)
 
     if final_head_obj is not None:
-        head_coords = np.array(final_head_obj["poly"].exterior.coords, dtype=np.int32)
+        poly_to_draw = final_head_obj["poly"]
+        if poly_to_draw.geom_type == 'MultiPolygon':
+            poly_to_draw = max(poly_to_draw.geoms, key=lambda a: a.area)
+            
+        head_coords = np.array(poly_to_draw.exterior.coords, dtype=np.int32)
         cv2.polylines(annotated_img, [head_coords], isClosed=True, color=head_color, thickness=2)
         label_text = f"Head {final_head_obj['conf']:.2f}"
-        draw_smart_label(annotated_img, final_head_obj["poly"], label_text, head_color, "head")
+        draw_smart_label(annotated_img, poly_to_draw, label_text, head_color, "head")
 
     for idx, eye_obj in enumerate(valid_eyes_objs):
-        eye_coords = np.array(eye_obj["poly"].exterior.coords, dtype=np.int32)
+        poly_to_draw = eye_obj["poly"]
+        if poly_to_draw.geom_type == 'MultiPolygon':
+            poly_to_draw = max(poly_to_draw.geoms, key=lambda a: a.area)
+            
+        eye_coords = np.array(poly_to_draw.exterior.coords, dtype=np.int32)
         cv2.polylines(annotated_img, [eye_coords], isClosed=True, color=eye_color, thickness=2)
         label_text = f"Eye {eye_obj['conf']:.2f}"
         hint = "left_eye" if idx == 0 else "right_eye"
-        draw_smart_label(annotated_img, eye_obj["poly"], label_text, eye_color, hint)
+        draw_smart_label(annotated_img, poly_to_draw, label_text, eye_color, hint)
 
     return annotated_img
